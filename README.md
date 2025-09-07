@@ -59,26 +59,26 @@ await client.connect();
 await client.login("admin", "password");
 
 // Query operations (automatically uses ? format)
-const users = await client.writeCommand("/ppp/secret/print", { name: "user1" });
+const users = await client.runQuery("/ppp/secret/print", { name: "user1" });
 
 // Command operations (automatically uses = format)
-const result = await client.writeCommand("/ppp/secret/add", {
+const result = await client.runQuery("/ppp/secret/add", {
   name: "newuser",
   password: "password123",
   profile: "default"
 });
 
 // Update operations
-await client.writeCommand("/ppp/secret/set", {
+await client.runQuery("/ppp/secret/set", {
   ".id": "*123",
   password: "newpassword"
 });
 
 // Delete operations
-await client.writeCommand("/ppp/secret/remove", { ".id": "*123" });
+await client.runQuery("/ppp/secret/remove", { ".id": "*123" });
 
 // Disconnect active users
-await client.writeCommand("/ppp/active/remove", { ".id": "*456" });
+await client.runQuery("/ppp/active/remove", { ".id": "*456" });
 
 client.close();
 ```
@@ -96,7 +96,7 @@ new RouterOSClient(host, port = 8728)
 
 - `connect()` - Connect to RouterOS
 - `login(username, password)` - Authenticate with RouterOS
-- `writeCommand(command, params = {})` - Execute command and return parsed objects
+- `runQuery(command, params = {})` - Execute command and return parsed objects
 - `close()` - Close connection
 
 #### Automatic Parameter Detection
@@ -113,7 +113,7 @@ The client automatically detects the correct parameter format:
 
 ```javascript
 try {
-  const result = await client.writeCommand("/ppp/secret/add", {...});
+  const result = await client.runQuery("/ppp/secret/add", {...});
 } catch (error) {
   console.error("RouterOS Error:", error.message);
   // Error: RouterOS Error: failure: secret with the same name already exists
