@@ -24,7 +24,7 @@ const { RouterOSClient } = require("./index.js");
     // 1. CREATE - Add new user
     console.log("\n--- 1. CREATING new user ---");
     try {
-      const addResult = await client.writeCommand("/ppp/secret/add", {
+      const addResult = await client.runQuery("/ppp/secret/add", {
         name: testUserName,
         password: testUserPassword,
         profile: testUserProfile,
@@ -39,7 +39,7 @@ const { RouterOSClient } = require("./index.js");
     // 2. READ - Query the user we just created
     console.log("\n--- 2. READING user ---");
     try {
-      const users = await client.writeCommand("/ppp/secret/print", {
+      const users = await client.runQuery("/ppp/secret/print", {
         name: testUserName,
       });
       console.log("✅ User found:", JSON.stringify(users, null, 2));
@@ -51,13 +51,13 @@ const { RouterOSClient } = require("./index.js");
     console.log("\n--- 3. UPDATING user ---");
     try {
       // First get the user's ID
-      const users = await client.writeCommand("/ppp/secret/print", {
+      const users = await client.runQuery("/ppp/secret/print", {
         name: testUserName,
       });
 
       if (users.length > 0) {
         const userId = users[0][".id"];
-        const updateResult = await client.writeCommand("/ppp/secret/set", {
+        const updateResult = await client.runQuery("/ppp/secret/set", {
           ".id": userId,
           password: "newPassword123",
           comment: "Updated test user",
@@ -73,7 +73,7 @@ const { RouterOSClient } = require("./index.js");
     // 4. READ again - Verify the update
     console.log("\n--- 4. READING updated user ---");
     try {
-      const users = await client.writeCommand("/ppp/secret/print", {
+      const users = await client.runQuery("/ppp/secret/print", {
         name: testUserName,
       });
       console.log("✅ Updated user:", JSON.stringify(users, null, 2));
@@ -85,13 +85,13 @@ const { RouterOSClient } = require("./index.js");
     console.log("\n--- 5. DELETING user ---");
     try {
       // First get the user's ID
-      const users = await client.writeCommand("/ppp/secret/print", {
+      const users = await client.runQuery("/ppp/secret/print", {
         name: testUserName,
       });
 
       if (users.length > 0) {
         const userId = users[0][".id"];
-        const deleteResult = await client.writeCommand("/ppp/secret/remove", {
+        const deleteResult = await client.runQuery("/ppp/secret/remove", {
           ".id": userId,
         });
         console.log("✅ User deleted:", JSON.stringify(deleteResult, null, 2));
@@ -105,7 +105,7 @@ const { RouterOSClient } = require("./index.js");
     // 6. READ final - Verify deletion
     console.log("\n--- 6. VERIFYING deletion ---");
     try {
-      const users = await client.writeCommand("/ppp/secret/print", {
+      const users = await client.runQuery("/ppp/secret/print", {
         name: testUserName,
       });
       if (users.length === 0) {
@@ -122,7 +122,7 @@ const { RouterOSClient } = require("./index.js");
     try {
       // First, find active users
       console.log("Finding active users...");
-      const activeUsers = await client.writeCommand("/ppp/active/print");
+      const activeUsers = await client.runQuery("/ppp/active/print");
       console.log(`Found ${activeUsers.length} active users`);
 
       if (activeUsers.length > 0) {
@@ -132,12 +132,9 @@ const { RouterOSClient } = require("./index.js");
         );
 
         // Disconnect the user
-        const disconnectResult = await client.writeCommand(
-          "/ppp/active/remove",
-          {
-            ".id": userToDisconnect[".id"],
-          }
-        );
+        const disconnectResult = await client.runQuery("/ppp/active/remove", {
+          ".id": userToDisconnect[".id"],
+        });
         console.log(
           "✅ Disconnect command sent:",
           JSON.stringify(disconnectResult, null, 2)
@@ -148,7 +145,7 @@ const { RouterOSClient } = require("./index.js");
 
         // Check if user is still active
         console.log("Checking if user is still connected...");
-        const stillActive = await client.writeCommand("/ppp/active/print", {
+        const stillActive = await client.runQuery("/ppp/active/print", {
           name: userToDisconnect.name,
         });
 

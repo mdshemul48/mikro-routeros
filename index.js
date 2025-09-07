@@ -148,14 +148,14 @@ class RouterOSClient {
   }
 
   async login(username, password) {
-    const responses = await this.writeCommand("/login", {
+    const responses = await this.runQuery("/login", {
       name: username,
       password,
     });
     return responses; // Login doesn't need parsing, just return raw for success/failure
   }
 
-  writeCommand(cmd, params = {}) {
+  runQuery(cmd, params = {}) {
     return new Promise((resolve, reject) => {
       // Auto-detect if this is a query command or action command
       const isQuery =
