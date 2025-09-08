@@ -1,5 +1,5 @@
 {
-  "name": "mikrotik-node",
+  "name": "mikro-routeros",
   "version": "1.0.0",
   "description": "A Node.js client for MikroTik RouterOS API with automatic parameter detection and response parsing",
   "license": "ISC",

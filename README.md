@@ -9,16 +9,14 @@ A Node.js client for MikroTik RouterOS API with automatic parameter detection an
 - ✅ **Error Handling** - Proper `!trap` and `!fatal` error handling
 - ✅ **Parsed Responses** - Returns clean JavaScript objects
 - ✅ **Full CRUD Operations** - Create, Read, Update, Delete users
-- ✅ **User Disconnection** - Disconnect active PPPoE sessions
-- ✅ **Environment Variables** - Secure credential management
 
 ## Installation
 
 ```bash
-npm install
+npm install mikro-routeros
 ```
 
-## Configuration
+## Configuration for test
 
 1. Copy the example environment file:
 ```bash
@@ -98,16 +96,6 @@ new RouterOSClient(host, port = 8728)
 - `login(username, password)` - Authenticate with RouterOS
 - `runQuery(command, params = {})` - Execute command and return parsed objects
 - `close()` - Close connection
-
-#### Automatic Parameter Detection
-
-The client automatically detects the correct parameter format:
-
-| Command Type | Example | Parameter Format |
-|-------------|---------|------------------|
-| **Query/Print** | `/ppp/secret/print` | `?name=value` |
-| **Login** | `/login` | `=name=value` |
-| **Commands** | `/ppp/secret/add` | `=name=value` |
 
 ## Error Handling
 
