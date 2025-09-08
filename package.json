@@ -1,16 +1,42 @@
 {
   "name": "mikro-routeros",
   "version": "1.0.0",
-  "description": "A Node.js client for MikroTik RouterOS API with automatic parameter detection and response parsing",
+  "description": "MikroTik API (RouterOS) client for Node.js with auto-parameter detection and response parsing. Works with PPPoE, Hotspot, and more.",
   "license": "ISC",
   "author": "",
   "type": "commonjs",
   "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "README.md"
+  ],
+  "sideEffects": false,
   "scripts": {
     "test": "node test.js",
     "start": "node test.js"
   },
-  "keywords": ["mikrotik", "routeros", "api", "networking", "ppp", "router"],
+  "keywords": [
+    "mikrotik",
+    "mikrotik api",
+    "routeros",
+    "routeros api",
+    "routeros-client",
+    "mikrotik-routeros",
+    "node",
+    "nodejs",
+    "node.js",
+    "api client",
+    "networking",
+    "ppp",
+    "pppoe",
+    "hotspot",
+    "capsman",
+    "wireless",
+    "firewall",
+    "network automation"
+  ],
   "engines": {
     "node": ">=12.0.0"
   },

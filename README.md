@@ -1,14 +1,14 @@
-# MikroTik RouterOS Node.js Client
+# MikroTik API (RouterOS) Client for Node.js
 
-A Node.js client for MikroTik RouterOS API with automatic parameter detection and response parsing.
+Node.js client for the MikroTik RouterOS API. Simple, fast, and lightweight with automatic parameter detection and parsed responses. Ideal for PPPoE, Hotspot, Firewall, Wireless, and general RouterOS automation.
 
 ## Features
 
-- ✅ **Automatic Parameter Detection** - No need to specify query vs command format
-- ✅ **Loops Until `!done`** - Handles multi-packet responses automatically
-- ✅ **Error Handling** - Proper `!trap` and `!fatal` error handling
-- ✅ **Parsed Responses** - Returns clean JavaScript objects
-- ✅ **Full CRUD Operations** - Create, Read, Update, Delete users
+- ✅ **Automatic parameter detection** for RouterOS commands (query vs action)
+- ✅ **Streams until `!done`** to handle multi-packet MikroTik API responses
+- ✅ **Proper error handling** for `!trap` and `!fatal`
+- ✅ **Parsed responses** into clean JavaScript objects
+- ✅ **Covers PPPoE, Hotspot, Firewall, Wireless** and more
 
 ## Installation
 
@@ -16,72 +16,82 @@ A Node.js client for MikroTik RouterOS API with automatic parameter detection an
 npm install mikro-routeros
 ```
 
-## Configuration for test
+## Quick start
 
-1. Copy the example environment file:
-```bash
-cp .env.example .env
-```
+```javascript
+const { RouterOSClient } = require('mikro-routeros');
 
-2. Edit `.env` with your MikroTik settings:
-```env
-# MikroTik RouterOS Connection Settings
-MIKROTIK_HOST=192.168.1.1
-MIKROTIK_PORT=8728
-MIKROTIK_USERNAME=admin
-MIKROTIK_PASSWORD=your_password_here
+async function main() {
+  const client = new RouterOSClient('192.168.88.1', 8728); // API port: 8728
+  await client.connect();
+  await client.login('admin', 'password');
 
-# Test User Settings
-TEST_USER_NAME=testUser
-TEST_USER_PASSWORD=testPassword
-TEST_USER_PROFILE=default
+  const users = await client.runQuery('/ppp/secret/print', { name: 'user1' });
+  console.log(users);
+
+  await client.close();
+}
+
+main().catch(console.error);
 ```
 
 ## Usage
 
-### Run Tests
+### Run tests (optional)
 ```bash
 npm test
-# or
-npm start
-# or
-node test.js
 ```
 
-### Use as Library
+### Library examples
 ```javascript
-const { RouterOSClient } = require('./index.js');
+const { RouterOSClient } = require('mikro-routeros');
 
-const client = new RouterOSClient("192.168.1.1", 8728);
+const client = new RouterOSClient('192.168.88.1', 8728);
 await client.connect();
-await client.login("admin", "password");
+await client.login('admin', 'password');
 
-// Query operations (automatically uses ? format)
-const users = await client.runQuery("/ppp/secret/print", { name: "user1" });
+// PPPoE users (query uses ?-prefixed params)
+const users = await client.runQuery('/ppp/secret/print', { name: 'user1' });
 
-// Command operations (automatically uses = format)
-const result = await client.runQuery("/ppp/secret/add", {
-  name: "newuser",
-  password: "password123",
-  profile: "default"
+// Add PPPoE secret (action uses =-prefixed params)
+await client.runQuery('/ppp/secret/add', {
+  name: 'newuser',
+  password: 'password123',
+  profile: 'default',
+  service: 'pppoe'
 });
 
-// Update operations
-await client.runQuery("/ppp/secret/set", {
-  ".id": "*123",
-  password: "newpassword"
+// Update user
+await client.runQuery('/ppp/secret/set', {
+  '.id': '*123',
+  password: 'newpassword'
 });
 
-// Delete operations
-await client.runQuery("/ppp/secret/remove", { ".id": "*123" });
+// Delete user
+await client.runQuery('/ppp/secret/remove', { '.id': '*123' });
 
-// Disconnect active users
-await client.runQuery("/ppp/active/remove", { ".id": "*456" });
+// Disconnect active user
+await client.runQuery('/ppp/active/remove', { '.id': '*456' });
 
-client.close();
+await client.close();
 ```
 
-## API Reference
+### More MikroTik API examples
+```javascript
+// Firewall rules
+await client.runQuery('/ip/firewall/filter/print');
+
+// Hotspot users
+await client.runQuery('/ip/hotspot/user/print');
+
+// Wireless registration table
+await client.runQuery('/interface/wireless/registration-table/print');
+
+// Get system identity
+await client.runQuery('/system/identity/print');
+```
+
+## API reference
 
 ### RouterOSClient
 
@@ -92,12 +102,14 @@ new RouterOSClient(host, port = 8728)
 
 #### Methods
 
-- `connect()` - Connect to RouterOS
+- `connect()` - Connect to RouterOS API (TCP)
 - `login(username, password)` - Authenticate with RouterOS
 - `runQuery(command, params = {})` - Execute command and return parsed objects
 - `close()` - Close connection
 
-## Error Handling
+TypeScript typings are included via `index.d.ts`.
+
+## Error handling
 
 ```javascript
 try {
@@ -108,7 +120,7 @@ try {
 }
 ```
 
-## Test Suite
+## Test suite
 
 The test suite demonstrates:
 
@@ -118,10 +130,24 @@ The test suite demonstrates:
 4. **DELETE** - Remove user
 5. **DISCONNECT** - Disconnect active user and verify
 
+Run locally:
+```bash
+npm start
+```
+
 ## Requirements
 
 - Node.js 12.0.0 or higher
 - Access to MikroTik RouterOS with API enabled
+
+Notes:
+- RouterOS API default ports: 8728 (plain TCP), 8729 (TLS). This client uses TCP.
+- Works with RouterOS v6/v7 command paths.
+
+## Links
+
+- MikroTik RouterOS API docs: [help.mikrotik.com/docs/display/ROS/API](https://help.mikrotik.com/docs/display/ROS/API)
+- RouterOS command reference: [wiki.mikrotik.com/wiki/Manual:TOC](https://wiki.mikrotik.com/wiki/Manual:TOC)
 
 ## License
 
