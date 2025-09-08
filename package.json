@@ -3,7 +3,15 @@
   "version": "1.0.1",
   "description": "MikroTik API (RouterOS) client for Node.js with auto-parameter detection and response parsing. Works with PPPoE, Hotspot, and more.",
   "license": "ISC",
-  "author": "",
+  "author": "mdshemul48",
+  "homepage": "https://github.com/mdshemul48/mikro-routeros#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mdshemul48/mikro-routeros.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mdshemul48/mikro-routeros/issues"
+  },
   "type": "commonjs",
   "main": "index.js",
   "types": "index.d.ts",
