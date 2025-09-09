@@ -132,9 +132,10 @@ function parseResponseToObjects(responses) {
 }
 
 class RouterOSClient {
-  constructor(host, port = 8728) {
+  constructor(host, port = 8728, timeout = 30000) {
     this.host = host;
     this.port = port;
+    this.timeout = timeout; // Connection timeout in milliseconds
     this.socket = new net.Socket();
     this.socket.setKeepAlive(true);
     this.buffer = Buffer.alloc(0);
@@ -142,8 +143,21 @@ class RouterOSClient {
 
   connect() {
     return new Promise((resolve, reject) => {
-      this.socket.connect(this.port, this.host, () => resolve());
-      this.socket.on("error", reject);
+      // Set connection timeout
+      const timeoutId = setTimeout(() => {
+        this.socket.destroy();
+        reject(new Error(`Connection timeout after ${this.timeout}ms`));
+      }, this.timeout);
+
+      this.socket.connect(this.port, this.host, () => {
+        clearTimeout(timeoutId);
+        resolve();
+      });
+
+      this.socket.on("error", (error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
     });
   }
 

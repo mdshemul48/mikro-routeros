@@ -1,5 +1,5 @@
 export declare class RouterOSClient {
-  constructor(host: string, port?: number);
+  constructor(host: string, port?: number, timeout?: number);
   connect(): Promise<void>;
   login(username: string, password: string): Promise<any>;
   runQuery<T = any>(
