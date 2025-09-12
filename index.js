@@ -1,4 +1,5 @@
 const net = require("net");
+const crypto = require("crypto");
 
 function encodeLength(len) {
   if (len < 0x80) return Buffer.from([len]);
@@ -138,7 +139,10 @@ class RouterOSClient {
     this.timeout = timeout; // Connection timeout in milliseconds
     this.socket = new net.Socket();
     this.socket.setKeepAlive(true);
+    this.socket.setNoDelay(true);
     this.buffer = Buffer.alloc(0);
+    this.loggedIn = false;
+    this.credentials = null; // { username, password }
   }
 
   connect() {
@@ -162,14 +166,102 @@ class RouterOSClient {
   }
 
   async login(username, password) {
-    const responses = await this.runQuery("/login", {
-      name: username,
-      password,
-    });
-    return responses; // Login doesn't need parsing, just return raw for success/failure
+    // Persist credentials for automatic re-login
+    this.credentials = { username, password };
+
+    // 1) Try modern login (ROS >= 6.43): /login =name= =password=
+    try {
+      await this._sendRaw(
+        "/login",
+        { name: username, password },
+        {
+          requestTimeoutMs: this.timeout,
+          collectAll: false,
+          retryOnNotLoggedIn: false,
+        }
+      );
+      this.loggedIn = true;
+      return [];
+    } catch (err) {
+      const message = String(err && err.message ? err.message : err);
+      // If credentials are invalid, don't attempt legacy flow
+      if (
+        /invalid user name or password|invalid username or password/i.test(
+          message
+        )
+      ) {
+        this.loggedIn = false;
+        throw err;
+      }
+      // Fall through to attempt legacy challenge-response (ROS < 6.43)
+    }
+
+    // 2) Legacy login flow:
+    //    a) Send /login (no params) → receive !done =ret=<hex-challenge>
+    //    b) Send /login =name=<user> =response=00<md5(0x00 + password + challenge)>
+    const probe = await this._sendRaw(
+      "/login",
+      {},
+      {
+        requestTimeoutMs: this.timeout,
+        collectAll: true,
+        retryOnNotLoggedIn: false,
+      }
+    );
+
+    let challengeHex = null;
+    for (const sentence of probe) {
+      if (sentence[0] === "!done") {
+        for (const item of sentence.slice(1)) {
+          if (item.startsWith("=ret=")) {
+            challengeHex = item.slice(5);
+            break;
+          }
+        }
+      }
+      if (challengeHex) break;
+    }
+
+    if (!challengeHex) {
+      throw new Error("RouterOS legacy login failed: no challenge received");
+    }
+
+    const challengeBuf = Buffer.from(challengeHex, "hex");
+    const md5 = crypto.createHash("md5");
+    md5.update(Buffer.from([0]));
+    md5.update(Buffer.from(password, "utf8"));
+    md5.update(challengeBuf);
+    const response = "00" + md5.digest("hex");
+
+    await this._sendRaw(
+      "/login",
+      { name: username, response },
+      {
+        requestTimeoutMs: this.timeout,
+        collectAll: false,
+        retryOnNotLoggedIn: false,
+      }
+    );
+
+    this.loggedIn = true;
+    return [];
   }
 
   runQuery(cmd, params = {}) {
+    return this._sendRaw(cmd, params, {
+      requestTimeoutMs: this.timeout,
+      collectAll: false,
+      retryOnNotLoggedIn: true,
+    }).then((responses) => parseResponseToObjects(responses));
+  }
+
+  _sendRaw(cmd, params = {}, options = {}) {
+    const {
+      requestTimeoutMs = this.timeout,
+      collectAll = false,
+      retryOnNotLoggedIn = true,
+    } = options;
+
     return new Promise((resolve, reject) => {
       // Auto-detect if this is a query command or action command
       const isQuery =
@@ -194,10 +286,34 @@ class RouterOSClient {
         parts.map(encodeWord).concat([Buffer.from([0])])
       );
 
-      this.socket.write(data);
+      const cleanup = () => {
+        if (requestTimer) clearTimeout(requestTimer);
+        this.socket.removeListener("data", onData);
+        this.socket.removeListener("error", onError);
+        this.socket.removeListener("close", onClose);
+        this.socket.removeListener("end", onEnd);
+      };
 
+      let settled = false;
       const responses = [];
       let done = false;
+
+      const fulfill = (value) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(value);
+      };
+      const fail = (error) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(error);
+      };
+
+      const requestTimer = setTimeout(() => {
+        fail(new Error(`Request timeout after ${requestTimeoutMs}ms`));
+      }, requestTimeoutMs);
 
       const onData = (chunk) => {
         // Append new data to buffer
@@ -215,50 +331,71 @@ class RouterOSClient {
 
           if (sentenceType === "!done") {
             done = true;
-            // Collect any final data from this sentence
-            if (sentence.length > 1) {
+            if (collectAll && sentence.length > 0) {
+              responses.push(sentence);
+            } else if (sentence.length > 1) {
+              // Keep compatibility: collect any final data from this sentence
               responses.push(sentence);
             }
           } else if (sentenceType === "!re") {
             responses.push(sentence);
           } else if (sentenceType === "!trap") {
-            this.socket.removeListener("data", onData);
-            this.socket.removeListener("error", onError);
             // Extract error message from trap response
             const errorMessage =
               sentence
                 .slice(1)
                 .find((item) => item.startsWith("=message="))
                 ?.slice(9) || "Unknown error";
-            reject(new Error(`RouterOS Error: ${errorMessage}`));
+            fail(new Error(`RouterOS Error: ${errorMessage}`));
             return;
           } else if (sentenceType === "!fatal") {
-            this.socket.removeListener("data", onData);
-            this.socket.removeListener("error", onError);
-            reject(
-              new Error(`RouterOS Fatal Error: ${sentence.slice(1).join(" ")}`)
-            );
+            const fatalMsg = sentence.slice(1).join(" ");
+            // If not logged in and credentials exist, attempt auto re-login once
+            if (
+              retryOnNotLoggedIn &&
+              /not logged in/i.test(fatalMsg) &&
+              this.credentials &&
+              !isLogin
+            ) {
+              // Pause handling and try to re-login then retry this command once
+              cleanup();
+              this.login(this.credentials.username, this.credentials.password)
+                .then(() =>
+                  this._sendRaw(cmd, params, {
+                    requestTimeoutMs,
+                    collectAll,
+                    retryOnNotLoggedIn: false,
+                  })
+                )
+                .then(fulfill, fail);
+              return;
+            }
+            fail(new Error(`RouterOS Fatal Error: ${fatalMsg}`));
             return;
           }
         }
 
-        // If we received !done, resolve with all accumulated responses
         if (done) {
-          this.socket.removeListener("data", onData);
-          this.socket.removeListener("error", onError);
-          // Parse responses to objects before resolving
-          resolve(parseResponseToObjects(responses));
+          fulfill(responses);
         }
       };
 
       const onError = (error) => {
-        this.socket.removeListener("data", onData);
-        this.socket.removeListener("error", onError);
-        reject(error);
+        fail(error);
+      };
+      const onClose = () => {
+        fail(new Error("Socket closed"));
+      };
+      const onEnd = () => {
+        fail(new Error("Socket ended"));
       };
 
       this.socket.on("data", onData);
       this.socket.on("error", onError);
+      this.socket.on("close", onClose);
+      this.socket.on("end", onEnd);
+
+      this.socket.write(data);
     });
   }
 
