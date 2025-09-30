@@ -255,31 +255,26 @@ class RouterOSClient {
     // Special handling for monitor-traffic command
     const isMonitorCommand = cmd.includes("/monitor");
     const transformedParams = {};
-    
+
     if (cmd.includes("monitor-traffic")) {
-      // For monitor-traffic commands, we need specific parameter formatting
+      // For monitor-traffic commands, use standard keys; encoding is handled later
       if (params.name || params.interface) {
-        transformedParams["=interface"] = params.name || params.interface;
+        transformedParams["interface"] = params.name || params.interface;
       }
-      transformedParams["=once"] = ""; // Always use once for monitor-traffic
-      if (params.proplist) {
-        transformedParams["=proplist"] = params.proplist;
-      }
-      // Ensure we have some default properties to monitor
-      if (!transformedParams["=proplist"]) {
-        transformedParams["=proplist"] = "rx-bits-per-second,tx-bits-per-second";
+      transformedParams["once"] = ""; // Always use once for monitor-traffic
+      if (params.proplist || params[".proplist"]) {
+        transformedParams[".proplist"] = params.proplist || params[".proplist"]; // API uses .proplist
       }
     } else {
-      // For non-monitor commands, use standard parameter handling
+      // For non-monitor commands, pass keys as-is; encoding is handled in _sendRaw
       for (const [key, value] of Object.entries(params)) {
-        const paramKey = key.startsWith("=") ? key : "=" + key;
-        transformedParams[paramKey] = value;
+        transformedParams[key] = value;
       }
     }
 
     return this._sendRaw(cmd, transformedParams, {
       requestTimeoutMs: 5000, // Short timeout for monitor-traffic
-      collectAll: false,      // Don't collect all responses
+      collectAll: false, // Don't collect all responses
       retryOnNotLoggedIn: true,
     }).then((responses) => {
       const result = parseResponseToObjects(responses);
@@ -297,10 +292,7 @@ class RouterOSClient {
 
     return new Promise((resolve, reject) => {
       // Auto-detect if this is a query command or action command
-      const isQuery =
-        cmd.includes("/print") ||
-        cmd.includes("/monitor") ||
-        cmd.includes("/getall");
+      const isQuery = cmd.includes("/print") || cmd.includes("/getall");
       const isLogin = cmd === "/login";
 
       let paramPrefix;
@@ -313,7 +305,11 @@ class RouterOSClient {
       }
 
       const parts = [cmd].concat(
-        Object.entries(params).map(([k, v]) => `${paramPrefix}${k}=${v}`)
+        Object.entries(params).map(([k, v]) => {
+          const normalizedKey = String(k).replace(/^[=?]+/, "");
+          const normalizedVal = v === undefined ? "" : v;
+          return `${paramPrefix}${normalizedKey}=${normalizedVal}`;
+        })
       );
       const data = Buffer.concat(
         parts.map(encodeWord).concat([Buffer.from([0])])
@@ -377,7 +373,7 @@ class RouterOSClient {
           } else if (sentenceType === "!re") {
             responses.push(sentence);
             // For monitor commands with once parameter, resolve after first response
-            if (cmd.includes("/monitor") && params["=once"] !== undefined) {
+            if (cmd.includes("/monitor") && params["once"] !== undefined) {
               fulfill(responses);
               return;
             }
