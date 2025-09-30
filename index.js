@@ -137,6 +137,7 @@ class RouterOSClient {
     this.host = host;
     this.port = port;
     this.timeout = timeout; // Connection timeout in milliseconds
+    this.monitorTimeout = timeout * 2; // Longer timeout for monitor commands
     this.socket = new net.Socket();
     this.socket.setKeepAlive(true);
     this.socket.setNoDelay(true);
@@ -248,16 +249,48 @@ class RouterOSClient {
   }
 
   runQuery(cmd, params = {}) {
-    return this._sendRaw(cmd, params, {
-      requestTimeoutMs: this.timeout,
-      collectAll: false,
+    // Normalize the command path
+    cmd = cmd.startsWith("/") ? cmd : "/" + cmd;
+
+    // Special handling for monitor-traffic command
+    const isMonitorCommand = cmd.includes("/monitor");
+    const transformedParams = {};
+    
+    if (cmd.includes("monitor-traffic")) {
+      // For monitor-traffic commands, we need specific parameter formatting
+      if (params.name || params.interface) {
+        transformedParams["=interface"] = params.name || params.interface;
+      }
+      transformedParams["=once"] = ""; // Always use once for monitor-traffic
+      if (params.proplist) {
+        transformedParams["=proplist"] = params.proplist;
+      }
+      // Ensure we have some default properties to monitor
+      if (!transformedParams["=proplist"]) {
+        transformedParams["=proplist"] = "rx-bits-per-second,tx-bits-per-second";
+      }
+    } else {
+      // For non-monitor commands, use standard parameter handling
+      for (const [key, value] of Object.entries(params)) {
+        const paramKey = key.startsWith("=") ? key : "=" + key;
+        transformedParams[paramKey] = value;
+      }
+    }
+
+    return this._sendRaw(cmd, transformedParams, {
+      requestTimeoutMs: 5000, // Short timeout for monitor-traffic
+      collectAll: false,      // Don't collect all responses
       retryOnNotLoggedIn: true,
-    }).then((responses) => parseResponseToObjects(responses));
+    }).then((responses) => {
+      const result = parseResponseToObjects(responses);
+      return result.length > 0 ? result : [];
+    });
   }
 
   _sendRaw(cmd, params = {}, options = {}) {
+    const isMonitorCommand = cmd.includes("/monitor");
     const {
-      requestTimeoutMs = this.timeout,
+      requestTimeoutMs = isMonitorCommand ? 5000 : this.timeout, // shorter timeout for monitor commands
       collectAll = false,
       retryOnNotLoggedIn = true,
     } = options;
@@ -334,11 +367,20 @@ class RouterOSClient {
             if (collectAll && sentence.length > 0) {
               responses.push(sentence);
             } else if (sentence.length > 1) {
-              // Keep compatibility: collect any final data from this sentence
               responses.push(sentence);
+            }
+            // For monitor commands with responses, resolve immediately after !done
+            if (cmd.includes("/monitor") && responses.length > 0) {
+              fulfill(responses);
+              return;
             }
           } else if (sentenceType === "!re") {
             responses.push(sentence);
+            // For monitor commands with once parameter, resolve after first response
+            if (cmd.includes("/monitor") && params["=once"] !== undefined) {
+              fulfill(responses);
+              return;
+            }
           } else if (sentenceType === "!trap") {
             // Extract error message from trap response
             const errorMessage =

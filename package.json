@@ -1,6 +1,6 @@
 {
   "name": "mikro-routeros",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "MikroTik API (RouterOS) client for Node.js with auto-parameter detection and response parsing. Works with PPPoE, Hotspot, and more.",
   "license": "ISC",
   "author": "MD. Shimul <mdshemul480@gmail.com>",
